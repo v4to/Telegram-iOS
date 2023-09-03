@@ -375,11 +375,14 @@ public final class ChatListNavigationBar: Component {
                 }
                 if let hasItemsToBeRevealed = hasItemsToBeRevealed, !hasItemsToBeRevealed {
                     self.onSwipeDownGradient.colors = [UIColor(red:0.01, green:0.45, blue:0.94, alpha:1.00).cgColor, UIColor(red:0.38, green:0.72, blue:0.99, alpha:1.00).cgColor]
+                    self.activateArchiveTextLabel.text = "Release for archive"
 
                 }
             } else {
                 self.activateArchiveView.frame.size.height = 0.0
                 self.onSwipeDownGradient.colors = [UIColor(red:0.64, green:0.66, blue:0.69, alpha:1.00).cgColor, UIColor(red:0.81, green:0.82, blue:0.84, alpha:1.00).cgColor]
+                self.activateArchiveTextLabel.text = "Swipe down for archive"
+
             }
 
 
