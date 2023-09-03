@@ -9,6 +9,10 @@ import SearchUI
 import AccountContext
 import TelegramCore
 import StoryPeerListComponent
+//import AppBundle
+//import AnimatedStickerNode
+import AnimationUI
+
 
 public final class ChatListNavigationBar: Component {
     public final class AnimationHint {
@@ -178,16 +182,95 @@ public final class ChatListNavigationBar: Component {
         private var disappearingTabsViewSearch: Bool = false
         
         private var currentHeaderComponent: ChatListHeaderComponent?
+
+        private let activateArchiveView: UIView
+        private let onSwipeDownGradient: CAGradientLayer
+        private let activateArchiveTextLabel: UILabel
+        private let sliderView: UIView
+        private let animationNode: AnimationNode
+
         
         override public init(frame: CGRect) {
+            self.animationNode = AnimationNode(
+                animation: "archive",
+                colors: [
+                    "info1.info1.stroke": UIColor.white,
+                    "info2.info2.Fill":  UIColor.white
+                ],
+                scale: 1.0
+            )
+//            self.animationNode.animationView()
+            self.sliderView = UIView()
+            self.sliderView.backgroundColor = UIColor(red:0.75, green:0.77, blue:0.80, alpha:1.00)
+            self.sliderView.frame = CGRect(x: 28.0, y: 0.0, width: 20.0, height: 20.0)
+            self.sliderView.layer.cornerRadius = 25.0 / 2
+            self.sliderView.clipsToBounds = true
+
+
+
+            self.activateArchiveTextLabel = UILabel()
+            self.activateArchiveTextLabel.font = Font.semibold(15.0)
+            self.activateArchiveTextLabel.textColor = .white
+//            self.activateArchiveTextLabel.font = Font.
+
+            self.activateArchiveTextLabel.text = "Swipe down for archive"
+//            self.activateArchiveTextLabel.layer.borderWidth = 1.0
+//            self.activateArchiveTextLabel.layer.borderColor = UIColor.green.cgColor
+            // 8 offset test y
+
+
+
+
+            self.activateArchiveView = UIView()
+            self.activateArchiveView.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 244.0)
+//            self.activateArchiveView.layer.borderColor = UIColor.red.cgColor
+//            self.activateArchiveView.layer.borderWidth = 2.0
+            self.activateArchiveView.clipsToBounds = true
+            self.activateArchiveView.layer.anchorPoint = CGPoint()
+
+
+
+            self.onSwipeDownGradient = CAGradientLayer()
+            self.onSwipeDownGradient.colors = [UIColor(red:0.64, green:0.66, blue:0.69, alpha:1.00).cgColor, UIColor(red:0.81, green:0.82, blue:0.84, alpha:1.00).cgColor]
+            self.onSwipeDownGradient.startPoint = CGPoint(x: 0, y: 0)
+            self.onSwipeDownGradient.endPoint = CGPoint(x: 1, y: 0)
+            self.onSwipeDownGradient.frame = self.activateArchiveView.bounds
+//            self.onSwipeDownGradient.anchorPoint = CGPoint(x: 0.0, y: 1.0)
+            self.onSwipeDownGradient.bounds.size.height = 1000.0
+//            self.onSwipeDownGradient.position = CGPoint(
+//                x: self.activateArchiveView.bounds.minX,
+//                y: self.activateArchiveView.bounds.maxY
+//            )
+
+            self.activateArchiveView.layer.insertSublayer(onSwipeDownGradient, at: 0)
+
+
             self.backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true)
+//            self.backgroundView.layer.borderColor = UIColor.blue.cgColor
+//            self.backgroundView.layer.borderWidth = 2.0
             self.backgroundView.layer.anchorPoint = CGPoint(x: 0.0, y: 1.0)
             self.separatorLayer = SimpleLayer()
             self.separatorLayer.anchorPoint = CGPoint()
             
             super.init(frame: frame)
-            
+
+
+            self.addSubview(self.activateArchiveView)
             self.addSubview(self.backgroundView)
+            self.activateArchiveView.addSubview(self.activateArchiveTextLabel)
+//            self.activateArchiveView.addSubview(self.sliderView)
+            self.activateArchiveTextLabel.sizeToFit()
+            self.activateArchiveTextLabel.center = CGPoint(x: self.activateArchiveView.bounds.midX, y: 30.0)
+
+
+
+
+
+
+//            self.activateArchiveView.frame.origin.y = -self.activateArchiveView.convert(self.activateArchiveView.frame.origin, to: nil).y
+
+
+
             self.layer.addSublayer(self.separatorLayer)
         }
         
@@ -219,7 +302,7 @@ public final class ChatListNavigationBar: Component {
             }
         }
         
-        public func applyScroll(offset: CGFloat, allowAvatarsExpansion: Bool, forceUpdate: Bool = false, transition: Transition) {
+        public func applyScroll(offset: CGFloat, hasItemsToBeRevealed: Bool? = nil, allowAvatarsExpansion: Bool, forceUpdate: Bool = false, transition: Transition) {
             let transition = transition
             
             self.rawScrollOffset = offset
@@ -256,12 +339,92 @@ public final class ChatListNavigationBar: Component {
             let previousHeight = self.separatorLayer.position.y
             
             self.backgroundView.update(size: CGSize(width: visibleSize.width, height: 1000.0), transition: transition.containedViewLayoutTransition)
-            
+
+
+//            transition.animatePosition(view: self.activateArchiveView, from: CGPoint(x: 0.0, y: -visibleSize.height +  self.activateArchiveView.layer.position.y), to: CGPoint(), additive: true)
+//            self.activateArchiveView.frame.origin.y = visibleSize.height
+//            self.onSwipeDownGradient.bounds.size.height = visibleSize.height
+
+
+//            self.activateArchiveView.bounds.frame.y = visibleSize.height - self.activateArchiveView
+//            self.activateArchiveView.bounds.size.height = visibleSize.height
+
+
+//            transition.setFrameWithAdditivePosition(
+//                layer: self.activateArchiveView.layer,
+//                frame: CGRect(
+//                    origin: CGPoint(x: 0.0, y: visibleSize.height),
+//                    size: CGSize(width: visibleSize.width, height: 500.0)
+//                )
+//            )
+
+            if clippedScrollOffset < 0  {
+
+                self.activateArchiveView.layer.position = CGPoint(x: 0.0, y: currentLayout.size.height)
+                self.activateArchiveView.frame.size.height = 0.0
+                self.activateArchiveView.frame.size.height -= clippedScrollOffset
+
+
+                self.activateArchiveTextLabel.frame.origin.y = 0 - self.activateArchiveTextLabel.frame.height - 8.0
+                self.activateArchiveTextLabel.frame.origin.y -= clippedScrollOffset
+
+                if self.sliderView.frame.origin.y < 10 {
+                    self.sliderView.frame.origin.y = 0 - self.sliderView.frame.height - 8.0
+                    self.sliderView.frame.origin.y -= clippedScrollOffset
+                    self.sliderView.layer.bounds.size.height -= clippedScrollOffset
+                }
+                if let hasItemsToBeRevealed = hasItemsToBeRevealed, !hasItemsToBeRevealed {
+                    self.onSwipeDownGradient.colors = [UIColor(red:0.01, green:0.45, blue:0.94, alpha:1.00).cgColor, UIColor(red:0.38, green:0.72, blue:0.99, alpha:1.00).cgColor]
+
+                }
+            } else {
+                self.activateArchiveView.frame.size.height = 0.0
+                self.onSwipeDownGradient.colors = [UIColor(red:0.64, green:0.66, blue:0.69, alpha:1.00).cgColor, UIColor(red:0.81, green:0.82, blue:0.84, alpha:1.00).cgColor]
+            }
+
+
+
+
+//            self.onSwipeDownGradient.bounds.size.height = visibleSize.height
+
+
+
+
+//            transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: CGPoint(), size: CGSize(width: visibleSize.width, height: 144.0)))
             transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: CGPoint(), size: CGSize(width: visibleSize.width, height: 1000.0)))
-            transition.animatePosition(view: self.backgroundView, from: CGPoint(x: 0.0, y: -visibleSize.height + self.backgroundView.layer.position.y), to: CGPoint(), additive: true)
-            self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)
+
+//            transition.animatePosition(view: self.backgroundView, from: CGPoint(x: 0.0, y: -visibleSize.height + self.backgroundView.layer.position.y), to: CGPoint(), additive: true)
+//            transition.animatePosition(view: self.backgroundView, from: CGPoint(x: 0.0, y: visibleSize.height - self.backgroundView.layer.position.y), to: CGPoint(), additive: true)
+//            self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)
+
+            self.backgroundView.layer.position = CGPoint(x: 0.0, y: currentLayout.size.height)
+
+
+
+            if let _ = component.tabsNode {
+                if visibleSize.height >= 136.0 && visibleSize.height <= currentLayout.size.height {
+                    self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)
+                }
+            } else {
+                if visibleSize.height >= 96.0 && visibleSize.height <= currentLayout.size.height {
+                    self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)
+                }
+            }
+
+//            self.backgroundView.layer.position = CGPoint(x: 0.0, y: 0.0)
+
+//            self.backgroundView.layer.position = CGPoint(x: 0.0, y: 1000.0)
+
             
-            transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+//            transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+            transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: currentLayout.size.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+//            if visibleSize.height >= 96.0 && visibleSize.height <= 148.0 {
+
+            if visibleSize.height >= 96.0 && visibleSize.height <= currentLayout.size.height {
+
+                transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+            }
+
             
             let searchContentNode: NavigationBarSearchContentNode
             if let current = self.searchContentNode {
@@ -300,7 +463,17 @@ public final class ChatListNavigationBar: Component {
             }
             
             let searchSize = CGSize(width: currentLayout.size.width - 6.0 * 2.0, height: navigationBarSearchContentHeight)
-            var searchFrame = CGRect(origin: CGPoint(x: 6.0, y: visibleSize.height - searchSize.height), size: searchSize)
+//            var searchFrame = CGRect(origin: CGPoint(x: 6.0, y: visibleSize.height - searchSize.height), size: searchSize)
+//            var searchFrame = CGRect(origin: CGPoint(x: 6.0, y: 148.0 - searchSize.height), size: searchSize)
+            var searchFrame = CGRect(origin: CGPoint(x: 6.0, y:  currentLayout.size.height - searchSize.height), size: searchSize)
+
+//            if visibleSize.height >= 96.0 && visibleSize.height <= 148.0 {
+            
+            if visibleSize.height >= 96.0 && visibleSize.height <=  currentLayout.size.height {
+
+                searchFrame.origin.y = visibleSize.height - searchSize.height
+            }
+
             if component.tabsNode != nil {
                 searchFrame.origin.y -= 40.0
             }
@@ -444,8 +617,23 @@ public final class ChatListNavigationBar: Component {
                     })
                 }
             }
-            
-            var tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: 46.0))
+
+
+            var tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height - 46.0), size: CGSize(width: visibleSize.width, height: 46.0))
+            print("CURRENT LAYOUT --- \(currentLayout.size.height)")
+            print("VISIBLE SIZIE --- \(visibleSize.height)")
+
+
+//            if visibleSize.height >= 96.0 && visibleSize.height <= currentLayout.size.height {
+//
+//                transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+//            }
+
+
+//            var tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: 136.0), size: CGSize(width: visibleSize.width, height: 46.0))
+
+//            var tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: currentLayout.size.height), size: CGSize(width: visibleSize.width, height: 46.0))
+
             if !component.isSearchActive {
                 tabsFrame.origin.y -= component.accessoryPanelContainerHeight
             }
@@ -453,19 +641,24 @@ public final class ChatListNavigationBar: Component {
                 tabsFrame.origin.y -= 46.0
             }
             
+//            var accessoryPanelContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: component.accessoryPanelContainerHeight))
             var accessoryPanelContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: component.accessoryPanelContainerHeight))
+            print("COMPONENT ACCESSORY PANEL HEIGHT --- \(component.accessoryPanelContainerHeight)")
+
             if !component.isSearchActive {
                 accessoryPanelContainerFrame.origin.y -= component.accessoryPanelContainerHeight
             }
             
             if let disappearingTabsView = self.disappearingTabsView {
                 disappearingTabsView.layer.anchorPoint = CGPoint()
+                tabsFrame.origin.y = visibleSize.height - 46.0
                 transition.setFrameWithAdditivePosition(view: disappearingTabsView, frame: tabsFrame.offsetBy(dx: 0.0, dy: self.disappearingTabsViewSearch ? (-currentLayout.size.height + 2.0) : 0.0))
             }
             
             if let tabsNode = component.tabsNode {
                 self.tabsNode = tabsNode
                 self.tabsNodeIsSearch = component.tabsNodeIsSearch
+                tabsNode.view.backgroundColor = self.backgroundView.backgroundColor
                 
                 var tabsNodeTransition = transition
                 if tabsNode.view.superview !== self {
@@ -485,8 +678,14 @@ public final class ChatListNavigationBar: Component {
                 } else {
                     transition.setAlpha(view: tabsNode.view, alpha: 1.0)
                 }
-                
-                tabsNodeTransition.setFrameWithAdditivePosition(view: tabsNode.view, frame: tabsFrame.offsetBy(dx: 0.0, dy: component.tabsNodeIsSearch ? (-currentLayout.size.height + 2.0) : 0.0))
+
+                if visibleSize.height >= 136.0 && visibleSize.height <= currentLayout.size.height {
+                    tabsFrame.origin.y = visibleSize.height - tabsFrame.height
+                    tabsNodeTransition.setFrameWithAdditivePosition(view: tabsNode.view, frame: tabsFrame.offsetBy(dx: 0.0, dy: component.tabsNodeIsSearch ? (-currentLayout.size.height + 2.0) : 0.0))
+                } else {
+                    tabsFrame.origin.y = currentLayout.size.height - tabsFrame.height
+                    tabsNodeTransition.setFrameWithAdditivePosition(view: tabsNode.view, frame: tabsFrame.offsetBy(dx: 0.0, dy: component.tabsNodeIsSearch ? (-currentLayout.size.height + 2.0) : 0.0))
+                }
             }
             
             if let accessoryPanelContainer = component.accessoryPanelContainer {
@@ -503,9 +702,12 @@ public final class ChatListNavigationBar: Component {
                 } else {
                     transition.setAlpha(view: accessoryPanelContainer.view, alpha: 1.0)
                 }
-                
+
                 tabsNodeTransition.setFrameWithAdditivePosition(view: accessoryPanelContainer.view, frame: accessoryPanelContainerFrame)
             }
+
+
+
         }
         
         public func updateStoryUploadProgress(storyUploadProgress: Float?) {

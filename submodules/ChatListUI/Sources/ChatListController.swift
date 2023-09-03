@@ -1327,9 +1327,23 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peer.peerId), subject: nil, botStart: nil, mode: .standard(previewing: true))
                             chatController.canReadHistory.set(false)
                             source = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
+//                        sourceNode: node
+//                            source = .extracted(ChatListItemContextExtractedContentSource(controller: strongSelf, sourceNode: node))
                         }
-                        
-                        let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: source, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.peerId, promoInfo: promoInfo, source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter), chatListController: strongSelf, joined: joined) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+//                        strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode
+                        let contextController = ContextController(
+                            account: strongSelf.context.account,
+                            presentationData: strongSelf.presentationData,
+                            source: source,
+                            items: chatContextMenuItems(
+                                context: strongSelf.context,
+                                peerId: peer.peerId,
+                                promoInfo: promoInfo,
+                                source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter),
+                                chatListController: strongSelf,
+                                joined: joined
+                            ) |> map { ContextController.Items(content: .list($0)) },
+                            gesture: gesture, peer: peer)
                         strongSelf.presentInGlobalOverlay(contextController)
                     }
                 case let .forum(pinnedIndex, _, threadId, _, _):
@@ -5614,6 +5628,31 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         case .disabled:
             return false
         }
+    }
+}
+
+private final class ChatListItemContextExtractedContentSource: ContextExtractedContentSource {
+    let keepInPlace: Bool = false
+    let ignoreContentTouches: Bool = true
+    let blurBackground: Bool = true
+//    let actionsHorizontalAlignment: ContextActionsHorizontalAlignment = .center
+
+    private let controller: ChatListController
+    private let sourceNode: ContextExtractedContentContainingNode
+
+    init(controller: ChatListController, sourceNode: ContextExtractedContentContainingNode) {
+//    init(controller: ViewController, sourceNode: ASDisplayNode) {
+
+        self.controller = controller
+        self.sourceNode = sourceNode
+    }
+
+    func takeView() -> ContextControllerTakeViewInfo? {
+        return ContextControllerTakeViewInfo(containingItem: .node(self.sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+    }
+
+    func putBack() -> ContextControllerPutBackViewInfo? {
+        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
 

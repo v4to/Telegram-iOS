@@ -1197,6 +1197,8 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.contextContainer = ContextControllerSourceNode()
         
         self.mainContentContainerNode = ASDisplayNode()
+//        self.mainContentContainerNode = ContextExtractedContentContainingNode()
+
         self.mainContentContainerNode.clipsToBounds = true
         
         self.measureNode = TextNode()
@@ -2723,6 +2725,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     if item.hiddenOffset {
                         strongSelf.layer.zPosition = -1.0
+                        strongSelf.layer.anchorPoint = CGPoint(x: 0, y: 1)
                     }
                                        
                     if case .groupReference = item.content {
@@ -2753,6 +2756,8 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     if useChatListLayout {
                         mainContentFrame = CGRect(origin: CGPoint(x: leftInset - 2.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height))
+//                        mainContentFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height))
+
                         mainContentBoundsOffset = mainContentFrame.origin.x
                         
                         if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
@@ -2763,7 +2768,11 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                         mainContentFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height))
                         mainContentBoundsOffset = 0.0
                     }
-                    
+
+//                    strongSelf.mainContentContainerNode.contentNode.frame = mainContentFrame
+
+//                    strongSelf.mainContentContainerNode.contentRect = CGRect(origin: CGPoint(x: mainContentBoundsOffset, y: 0.0), size: mainContentFrame.size)
+
                     transition.updatePosition(node: strongSelf.mainContentContainerNode, position: mainContentFrame.center)
                     
                     transition.updateBounds(node: strongSelf.mainContentContainerNode, bounds: CGRect(origin: CGPoint(x: mainContentBoundsOffset, y: 0.0), size: mainContentFrame.size))

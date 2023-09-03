@@ -1123,6 +1123,8 @@ public final class ChatListNode: ListView {
     public var toggleArchivedFolderHiddenByDefault: (() -> Void)?
     public var hidePsa: ((EnginePeer.Id) -> Void)?
     public var activateChatPreview: ((ChatListItem, Int64?, ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?
+//    public var activateChatPreview: ((ChatListItem, Int64?, ContextExtractedContentContainingNode, ContextGesture?, CGPoint?) -> Void)?
+
     public var openStories: ((ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void)?
     
     private var theme: PresentationTheme
@@ -1259,7 +1261,7 @@ public final class ChatListNode: ListView {
         self.theme = theme
         
         self.scrollHeightTopInset = ChatListNavigationBar.searchScrollHeight
-        
+
         super.init()
         
         //self.useMainQueueTransactions = true
@@ -2815,7 +2817,7 @@ public final class ChatListNode: ListView {
                 case .none, .unknown:
                     revealHiddenItems = false
                 case let .known(value):
-                    revealHiddenItems = value <= -strongSelf.tempTopInset - 60.0
+                    revealHiddenItems = value <= -strongSelf.tempTopInset - -164.0
             }
             if !revealHiddenItems && strongSelf.currentState.hiddenItemShouldBeTemporaryRevealed {
                 /*strongSelf.updateState { state in
@@ -2852,11 +2854,12 @@ public final class ChatListNode: ListView {
                 case let .known(value):
                 atTop = value <= -strongSelf.tempTopInset
                     if strongSelf.startedScrollingAtUpperBound && startedScrollingWithCanExpandHiddenItems && strongSelf.isTracking {
-                        revealHiddenItems = value <= -strongSelf.tempTopInset - 60.0
+                        revealHiddenItems = value <= -strongSelf.tempTopInset - 164.0
                     }
             }
             strongSelf.scrolledAtTopValue = atTop
             strongSelf.contentOffsetChanged?(offset)
+
             if revealHiddenItems && !strongSelf.currentState.hiddenItemShouldBeTemporaryRevealed {
                 //strongSelf.revealScrollHiddenItem()
             }
@@ -2933,6 +2936,8 @@ public final class ChatListNode: ListView {
             if self.hapticFeedback == nil {
                 self.hapticFeedback = HapticFeedback()
             }
+
+//            return
             self.hapticFeedback?.impact(.medium)
             self.updateState { state in
                 var state = state
@@ -3318,7 +3323,7 @@ public final class ChatListNode: ListView {
     private var previousStoriesInset: CGFloat?
     
     public func updateLayout(transition: ContainedViewLayoutTransition, updateSizeAndInsets: ListViewUpdateSizeAndInsets, visibleTopInset: CGFloat, originalTopInset: CGFloat, storiesInset: CGFloat, inlineNavigationLocation: ChatListControllerLocation?, inlineNavigationTransitionFraction: CGFloat) {
-        //print("inset: \(updateSizeAndInsets.insets.top)")
+        print("inset: \(updateSizeAndInsets.insets.top)")
         
         var highlightedLocation: ChatListHighlightedLocation?
         if case let .forum(peerId) = inlineNavigationLocation {

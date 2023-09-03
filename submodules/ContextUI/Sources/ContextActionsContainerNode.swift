@@ -81,7 +81,7 @@ private final class InnerActionsContainerNode: ASDisplayNode {
         
         self.containerNode = ASDisplayNode()
         self.containerNode.clipsToBounds = true
-        self.containerNode.cornerRadius = 14.0
+        self.containerNode.cornerRadius = 13.0
         self.containerNode.backgroundColor = presentationData.theme.contextMenu.backgroundColor
 
         var requestUpdateAction: ((AnyHashable, ContextMenuActionItem) -> Void)?
@@ -195,7 +195,9 @@ private final class InnerActionsContainerNode: ASDisplayNode {
     }
     
     func updateLayout(widthClass: ContainerViewLayoutSizeClass, constrainedWidth: CGFloat, constrainedHeight: CGFloat, minimalWidth: CGFloat?, transition: ContainedViewLayoutTransition) -> CGSize {
-        var minActionsWidth: CGFloat = 250.0
+//        var minActionsWidth: CGFloat = 250.0
+        var minActionsWidth: CGFloat = 198.0
+
         if let minimalWidth = minimalWidth, minimalWidth > minActionsWidth {
             minActionsWidth = minimalWidth
         }
@@ -441,10 +443,10 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         
         self.backgroundNode.backgroundColor = presentationData.theme.contextMenu.backgroundColor
         self.backgroundNode.clipsToBounds = true
-        self.backgroundNode.cornerRadius = 14.0
+        self.backgroundNode.cornerRadius = 13.0
         
         self.highlightBackgroundNode.clipsToBounds = true
-        self.highlightBackgroundNode.cornerRadius = 14.0
+        self.highlightBackgroundNode.cornerRadius = 13.0
         
         let textSelectionNode = TextSelectionNode(theme: TextSelectionTheme(selection: presentationData.theme.contextMenu.primaryColor.withAlphaComponent(0.15), knob: presentationData.theme.contextMenu.primaryColor, knobDiameter: 8.0), strings: presentationData.strings, textNode: self.textNode.textNode, updateIsActive: { _ in
         }, present: { _, _ in

@@ -265,11 +265,15 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
     
     private let clippingNode: ASDisplayNode
     private let scrollNode: ASScrollNode
+    private var sourceView: UIView
+    private var sourceSuperView: UIView
     
     private var originalProjectedContentViewFrame: (CGRect, CGRect)?
+    private var contentUnscaledFrame = CGRect.zero
     private var contentAreaInScreenSpace: CGRect?
     private var customPosition: CGPoint?
     private let contentContainerNode: ContextContentContainerNode
+    private let contentContainerDimView: UIView
     private var actionsContainerNode: ContextActionsContainerNode
     
     private var didCompleteAnimationIn = false
@@ -286,6 +290,9 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
     private let itemsDisposable = MetaDisposable()
     
     private let blurBackground: Bool
+    private let peer: EngineRenderedPeer?
+    private let transitionTitleLabel: UILabel
+
     
     var overlayWantsToBeBelowKeyboard: Bool {
         if let presentationNode = self.presentationNode {
@@ -304,9 +311,11 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         beginDismiss: @escaping (ContextMenuActionResult) -> Void,
         recognizer: TapLongTapOrDoubleTapGestureRecognizer?,
         gesture: ContextGesture?,
+        peer: EngineRenderedPeer? = nil,
         beganAnimatingOut: @escaping () -> Void,
         attemptTransitionControllerIntoNavigation: @escaping () -> Void
     ) {
+        self.peer = peer
         self.presentationData = presentationData
         self.source = source
         self.items = items
@@ -314,6 +323,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         self.beganAnimatingOut = beganAnimatingOut
         self.attemptTransitionControllerIntoNavigation = attemptTransitionControllerIntoNavigation
         self.gesture = gesture
+        self.transitionTitleLabel = UILabel()
         
         self.getController = { [weak controller] in
             return controller
@@ -325,14 +335,17 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
             if presentationData.theme.rootController.keyboardColor == .dark {
                 self.effectView.effect = UIBlurEffect(style: .dark)
             } else {
-                self.effectView.effect = UIBlurEffect(style: .light)
+//                self.effectView.effect = UIBlurEffect(style: .light)
+                self.effectView.effect = UIBlurEffect(style: .dark)
+
             }
             self.effectView.alpha = 0.0
         }
         
         self.dimNode = ASDisplayNode()
-        self.dimNode.backgroundColor = presentationData.theme.contextMenu.dimColor
+        self.dimNode.backgroundColor = presentationData.theme.contextMenu.dimColor.withAlphaComponent(0.09)
         self.dimNode.alpha = 0.0
+        
         
         self.withoutBlurDimNode = ASDisplayNode()
         self.withoutBlurDimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.4)
@@ -345,7 +358,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         
         self.clippingNode = ASDisplayNode()
         self.clippingNode.clipsToBounds = true
-        
+
         self.scrollNode = ASScrollNode()
         self.scrollNode.canCancelAllTouchesInViews = true
         self.scrollNode.view.delaysContentTouches = false
@@ -355,6 +368,12 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         }
         
         self.contentContainerNode = ContextContentContainerNode()
+        self.sourceView = UIView()
+        self.sourceSuperView = UIView()
+        self.contentContainerDimView = UIView()
+        self.contentContainerDimView.backgroundColor = .white.withAlphaComponent(0.5)
+        self.contentContainerDimView.alpha = 0.0
+
         
         var feedbackTap: (() -> Void)?
         var updateLayout: (() -> Void)?
@@ -797,17 +816,41 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                 self.originalProjectedContentViewFrame = (convertFrame(takenViewInfo.contentContainingNode.frame, from: parentSupernode.view, to: self.view), convertFrame(takenViewInfo.contentContainingNode.contentRect, from: takenViewInfo.contentContainingNode.view, to: self.view))
             }*/
         case let .controller(source):
+            // MARK: - ContentContaierMark
             let transitionInfo = source.transitionInfo()
             if let transitionInfo = transitionInfo, let (sourceView, sourceNodeRect) = transitionInfo.sourceNode() {
                 let contentParentNode = ContextControllerContentNode(sourceView: sourceView, controller: source.controller, tapped: { [weak self] in
                     self?.attemptTransitionControllerIntoNavigation()
                 })
+                self.sourceView = sourceView
+                self.sourceSuperView = sourceView.superview ?? UIView()
                 self.contentContainerNode.contentNode = .controller(contentParentNode)
                 self.scrollNode.addSubnode(self.contentContainerNode)
                 self.contentContainerNode.clipsToBounds = true
                 self.contentContainerNode.cornerRadius = 14.0
+
+                if let peer = peer, let peers = peer.peers[peer.peerId] {
+                    switch peers {
+                    case let .user(user):
+                        print(user)
+                        self.transitionTitleLabel.text = "\(user.firstName ?? "") \(user.lastName ?? "")"
+                    case let .channel(channel):
+                        print(channel)
+                        self.transitionTitleLabel.text = "\(channel.title)"
+                    case let .secretChat(secretChat):
+                        print(secretChat)
+                    case let .legacyGroup(legacyGroup):
+                        print(legacyGroup)
+                        self.transitionTitleLabel.text = "\(legacyGroup.title)"
+                    }
+                }
+
+//                contentParentNode.view.addSubview(self.contentContainerDimView)
                 self.contentContainerNode.addSubnode(contentParentNode)
-                
+//                self.contentContainerNode.view.addSubview(self.contentContainerDimView)
+//                self.contentContainerNode.layer.borderColor = UIColor.red.cgColor
+//                self.contentContainerNode.layer.borderWidth = 1.0
+
                 let projectedFrame = convertFrame(sourceNodeRect, from: sourceView, to: self.view)
                 self.originalProjectedContentViewFrame = (projectedFrame, projectedFrame)
             }
@@ -848,7 +891,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
             if let transitionInfo = transitionInfo, let (sourceView, sourceNodeRect) = transitionInfo.sourceNode() {
                 let projectedFrame = convertFrame(sourceNodeRect, from: sourceView, to: self.view)
                 self.originalProjectedContentViewFrame = (projectedFrame, projectedFrame)
-                
+
                 var updatedContentAreaInScreenSpace = transitionInfo.contentAreaInScreenSpace
                 updatedContentAreaInScreenSpace.origin.x = 0.0
                 updatedContentAreaInScreenSpace.size.width = self.bounds.width
@@ -873,9 +916,12 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                 let propertyAnimator = propertyAnimator as? UIViewPropertyAnimator
                 propertyAnimator?.stopAnimation(true)
             }
-            self.effectView.effect = makeCustomZoomBlurEffect(isLight: presentationData.theme.rootController.keyboardColor == .light)
-            self.effectView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
-            self.propertyAnimator = UIViewPropertyAnimator(duration: 0.2 * animationDurationFactor * UIView.animationDurationFactor(), curve: .easeInOut, animations: {
+//            self.effectView.effect = makeCustomZoomBlurEffect(isLight: presentationData.theme.rootController.keyboardColor == .light)
+//            self.effectView.effect = makeCustomZoomBlurEffect(isLight: false)
+
+//            self.effectView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
+            self.propertyAnimator = UIViewPropertyAnimator(duration: 0.2 * animationDurationFactor * UIView.animationDurationFactor(), curve: .easeInOut, animations: { [weak self] in
+                self?.effectView.effect = makeCustomZoomBlurEffect(isLight: self?.presentationData.theme.rootController.keyboardColor == .light)
             })
         }
         
@@ -959,29 +1005,87 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                 
                 extracted.willUpdateIsExtractedToContextPreview?(true, .animated(duration: 0.2, curve: .easeInOut))
             case .controller:
-                let springDuration: Double = 0.52 * animationDurationFactor
-                let springDamping: CGFloat = 110.0
-                
+//                0.327
+                //0321
+                //0322 - best
+//                let springDuration: Double = 0.324 * animationDurationFactor
+//                let springDuration: Double = 0.52 * animationDurationFactor
+//                let springDamping: CGFloat = 110.0
+
+                //0.475
+                // easeinesaseout slower
+//                let springDuration: Double = 0.52 * animationDurationFactor
+
+                // regular
+//                let springDuration: Double = 0.62 * animationDurationFactor
+
+//                     easeine slower
+                let springDuration: Double = 0.475 * animationDurationFactor
+//                let springDamping: CGFloat = 117.0 // better
+//                let springDamping: CGFloat = 113 // much better
+//                let springDamping: CGFloat = 88 // much better
+                let springDamping: CGFloat = 113 // best sos far
+
+
                 self.actionsContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
                 self.actionsContainerNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
                 self.contentContainerNode.allowsGroupOpacity = true
-                self.contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor, completion: { [weak self] _ in
-                    self?.contentContainerNode.allowsGroupOpacity = false
-                })
-                
+//                self.contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor, completion: { [weak self] _ in
+//                    self?.contentContainerNode.allowsGroupOpacity = false
+//                })
+//                self.contentContainerNode.allowsGroupOpacity = false
+//                self.contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 2.9, completion: { [weak self] _ in
+//                    self?.contentContainerNode.allowsGroupOpacity = false
+//                })
+
+                /*
+                if case let .controller(controllerContentNode) = contentNode {
+                    controllerContentNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.145, completion: { [weak self] _ in
+                        self?.contentContainerNode.allowsGroupOpacity = false
+                    })
+                }*/
+
+                //
                 if let originalProjectedContentViewFrame = self.originalProjectedContentViewFrame {
                     let localSourceFrame = self.view.convert(CGRect(origin: CGPoint(x: originalProjectedContentViewFrame.1.minX, y: originalProjectedContentViewFrame.1.minY), size: CGSize(width: originalProjectedContentViewFrame.1.width, height: originalProjectedContentViewFrame.1.height)), to: self.scrollNode.view)
                     
-                    self.contentContainerNode.layer.animateSpring(from: min(localSourceFrame.width / self.contentContainerNode.frame.width, localSourceFrame.height / self.contentContainerNode.frame.height) as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+//                    self.contentContainerNode.layer.animateSpring(from: min(localSourceFrame.width / self.contentContainerNode.frame.width, localSourceFrame.height / self.contentContainerNode.frame.height) as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+
+                    let srcView = self.sourceView.snapshotContentTree()!
+                    srcView.backgroundColor = .white
+                    let srcBackground = UIView()
                     
+                    srcBackground.backgroundColor = .white
+                    srcBackground.frame = CGRect(origin: .zero, size: srcView.bounds.size)
+//                    let titleView = self.sourceView.subviews[0].subviews[0].snapshotContentTree()!
+//                    srcBackground.addSubview(titleView)
+//                    srcView.insertSubview(srcBackground, at: 0)
+
+//                    self.contentContainerNode.view.addSubview(srcBackground)
+//                    srcBackground.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
+//                    srcBackground.layer.position = CGPoint(x: srcView.layer.position.x, y: 0.0)
+
+
+
                     switch self.source {
                     case let .controller(controller):
                         controller.animatedIn()
+                        self.contentContainerNode.view.addSubview(srcView)
                     default:
                         break
                     }
                     
-                    let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x, y: localSourceFrame.center.y - self.contentContainerNode.frame.center.y)
+//                    let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x, y: localSourceFrame.center.y - self.contentContainerNode.frame.center.y)
+//                    let contentContainerOffset = CGPoint(
+//                        x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x,
+//                        y: localSourceFrame.maxY - self.contentContainerNode.frame.center.y - self.contentContainerNode.view.bounds.midY
+//                    )
+
+
+                    let contentContainerOffset = CGPoint(
+                        x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x,
+                        y: localSourceFrame.maxY - self.contentContainerNode.frame.maxY
+                    )
                     if let contentNode = self.contentContainerNode.contentNode, case let .controller(controller) = contentNode {
                         let snapshotView: UIView? = nil// controller.sourceNode.view.snapshotContentTree()
                         if let snapshotView = snapshotView {
@@ -995,10 +1099,496 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                             })
                         }
                     }
+//                    print(localSourceFrame.center)
+                    let center = localSourceFrame.center
+                    let toCenter =  self.contentContainerNode.frame.center
+                    print(center, toCenter)
+
                     self.actionsContainerNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - self.actionsContainerNode.position.x, y: localSourceFrame.center.y - self.actionsContainerNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
-                    self.contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true, completion: { [weak self] _ in
-                        self?.animatedIn = true
-                    })
+//                    self.contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true, completion: { [weak self] _ in
+//                        self?.animatedIn = true
+//                    })
+
+//                    self.sourceView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.145, removeOnCompletion: false)
+//                    self.sourceView.layer.allowsGroupOpacity = false
+//                    self.sourceView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
+//                    srcView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
+
+
+
+                    
+//                    self.sourceView.layer.animatePosition(
+//                        from: CGPoint(),
+//                        to: CGPoint(x: 58.0, y: 0.0),
+//                        duration: 0.2 * animationDurationFactor,
+//                        additive: true
+//                    )
+//                    self.sourceView.layer.animateScaleY(from: 1.0, to: 0.0, duration: 0.2)
+                    var sourceViewFinalHeight: CGFloat
+//                    var navBarHeight: CGFloat = 44
+
+                    if let controller = self.getController(), let layout = self.validLayout {
+//                        navBarHeight = controller.navigationLayout(layout: layout).defaultContentHeight
+                        sourceViewFinalHeight = controller.navigationLayout(layout: layout).defaultContentHeight * (self.contentContainerNode.frame.width / localSourceFrame.width)
+                    } else {
+                        sourceViewFinalHeight = 44 / 2
+                    }
+
+
+//					let
+
+//                    srcView.clipsToBounds = true
+                    srcView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
+                    srcView.layer.position = CGPoint(x: srcView.layer.position.x, y: 0.0)
+
+
+//                    srcView.layer.animateSpring(
+//                        from: srcView.bounds.height as NSNumber,
+//                        to: sourceViewFinalHeight as NSNumber,
+//                        keyPath: "bounds.size.height",
+//                        duration: sprindDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        removeOnCompletion: false
+//
+//                    )
+//                    srcView.layer.animateSpring(
+//                        from: 1.0 as NSNumber,
+//                        to: self.contentContainerNode.frame.width / localSourceFrame.width as NSNumber,
+//                        keyPath: "transform.scale",
+//                        duration: springDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        removeOnCompletion: false
+//                    )
+//                    srcView.layer.animateHeight(
+//                        from: srcView.bounds.height,
+//                        to: sourceViewFinalHeight,
+//                        duration: 0.2 * animationDurationFactor,
+//                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
+//                        removeOnCompletion: false
+//                    )
+//                    let h = srcView.bounds.height - sourceViewFinalHeight
+//                    let o =
+//                    srcBackground.frame = CGRect(x: 0.0, y: srcView.bounds.height - h, width: srcView.bounds.width, height: h)
+//                    srcView.frame.origin.y = srcView.bounds.height
+
+//                    titleView.layer.animatePosition(from: titleView.layer.position, to: sourceViewFinalHeight / 2, duration: 0.350)
+
+
+                    /*
+                    titleView.layer.animateSpring(
+                        from: NSValue(cgPoint: titleView.layer.position),
+                        to: NSValue(cgPoint: CGPoint(x: self.contentContainerNode.bounds.width / 2, y: sourceViewFinalHeight / 2)),
+                        keyPath: "position",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        removeOnCompletion: false
+                    )*/
+                    srcView.layer.animateSpring(
+                        from: NSValue(cgPoint: srcView.layer.position),
+                        //                        from: srcBackground.bounds.height as NSNumber,
+                        to: NSValue(cgPoint: CGPoint(x: self.contentContainerNode.bounds.width / 2, y: sourceViewFinalHeight / 2)),
+                        keyPath: "position",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        removeOnCompletion: false
+
+                    )
+                    srcView.layer.animateSpring(
+                        from: 1.0 as NSNumber,
+                        to: self.contentContainerNode.frame.width / localSourceFrame.width as NSNumber,
+                        keyPath: "transform.scale",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        removeOnCompletion: false
+
+                    )
+                    srcView.layer.animateSpring(
+                        from: 1.0 as NSNumber,
+                        to: 0.0 as NSNumber,
+                        keyPath: "opacity",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        removeOnCompletion: false
+                    )
+//                    srcView.layer.animateSpring(
+//                        from:NSValue(cgSize: srcView.bounds.size),
+////                        from: srcBackground.bounds.height as NSNumber,
+//                        to: NSValue(cgSize: CGSize(width: self.contentContainerNode.bounds.width, height: sourceViewFinalHeight)),
+//                        keyPath: "bounds.size",
+//                        duration: springDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        removeOnCompletion: false
+//
+//                    )
+//                    srcView.layer.animateSpring(
+//                    	from: srcView.bounds.height as NSNumber,
+////                        from: NSValue(cgPoint: .zero),
+//                        to: NSValue(cgPoint: CGPoint(x: 0.0, y: -srcBackground.bounds.height)),
+//                        keyPath: "position",
+//                        duration: springDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        additive: true
+//                    )
+//                    srcBackground.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+//                    srcBackground.layer.animateSpring(
+//                        from: 1.0 as NSNumber,
+//                        to: 0.0 as NSNumber,
+//                        keyPath: "opacity",
+//                        duration: springDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        removeOnCompletion: false
+//                    )
+
+
+
+//                    self.contentContainerNode.layer.animateAnchorPoint(from: <#T##CGPoint#>, to: <#T##CGPoint#>, duration: <#T##Double#>)
+
+                    self.contentContainerDimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2 * animationDurationFactor)
+
+
+                    if case let .controller(controllerContentNode) = contentNode {
+                        controllerContentNode.controller.displayNode.layer.borderWidth = 0.0
+//
+
+                        /*
+                        controllerContentNode.layer.borderColor = UIColor.blue.cgColor
+                        controllerContentNode.layer.borderWidth = 1.0
+                        controllerContentNode.clipsToBounds = true
+
+//                        let savedMaxYContent = controllerContentNode.frame.maxY
+                        controllerContentNode.layer.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+                        controllerContentNode.layer.position = CGPoint(
+                            x: self.contentContainerNode.bounds.center.x,
+                            y: self.contentContainerNode.bounds.maxY
+                        )
+                        let scaledFactor = (controllerContentNode.bounds.width - 24) / controllerContentNode.bounds.width
+
+                        controllerContentNode.layer.animateSpring(
+                            from: NSValue(cgRect: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: localSourceFrame.height)),
+                            to: NSValue(
+                                cgRect: CGRect(
+                                    origin: CGPoint.zero,
+                                    size: CGSize(
+                                        width: controllerContentNode.bounds.width * scaledFactor,
+                                        height: controllerContentNode.bounds.height * scaledFactor
+                                    )
+                                )
+                            ),
+                            keyPath: "bounds",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping,
+                            completion: { [weak self] _ in
+                                    //                        self?.contentContainerNode.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+                                self?.animatedIn = true
+                            }
+                        )
+
+                        controllerContentNode.layer.animateSpring(
+                            from: 1.0 as NSNumber,
+                            to: (controllerContentNode.bounds.width - 24) / controllerContentNode.bounds.width as NSNumber,
+                            keyPath: "transform.scale",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping
+                        )*/
+
+
+
+
+//                        controllerContentNode.layer.animateSpring(
+//                            from: NSValue(cgRect: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: self.contentUnscaledFrame.height)),
+//                            to: NSValue(
+//                                cgRect: CGRect(
+//                                	origin:CGPoint(
+//                                    	x: ((self.contentUnscaledFrame.width - self.contentContainerNode.bounds.width) / 2),
+//                                        y: ((self.contentUnscaledFrame.height - self.contentContainerNode.bounds.height) / 2 - 12.0)
+//                                	),
+//                                	size: CGSize(
+//                                    	width: self.contentContainerNode.bounds.width,
+//                                    	height: self.contentContainerNode.bounds.height
+//                                    )
+//                                )
+//                            ),
+//                            keyPath: "bounds",
+//                            duration: springDuration,
+//                            initialVelocity: 0.0,
+//                            damping: springDamping,
+//                            completion: { [weak self] _ in
+//                                    //                        self?.contentContainerNode.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+//                                self?.animatedIn = true
+//                            }
+//                        )
+//                        controllerContentNode.layer.animateSpring(
+////                            from: NSValue(
+////                                cgSize: controllerContentNode.bounds.size.height
+////                            ),
+////                            to: NSValue(cgSize: self.contentContainerNode.bounds.size.height),
+//                            from: controllerContentNode.bounds.size.height as NSNumber,
+//                            to: self.contentContainerNode.bounds.size.height as NSNumber,
+//                            keyPath: "bounds.size.height",
+//                            duration: springDuration,
+//                            initialVelocity: 0.0,
+//                            damping: springDamping,
+//                            removeOnCompletion: false
+//                        )
+//                        controllerContentNode.layer.borderWidth = 0.0
+//                        let toY = self.contentContainerNode.frame.minY -
+//                        controllerContentNode.convert(controllerContentNode.bounds, to: nil).minY +
+//                        controllerContentNode.layer.position.y
+
+						/*
+                        let toY = self.contentContainerNode.frame.minY -
+                        controllerContentNode.convert(controllerContentNode.bounds, to: nil).minY +
+                        controllerContentNode.layer.position.y
+
+                        controllerContentNode.layer.animatePosition(
+                            from: CGPoint(
+                            	x: localSourceFrame.width / 2,
+                                y: self.contentContainerNode.bounds.height /
+                                (self.contentContainerNode.frame.width / localSourceFrame.width) / 2
+                            ),
+                            to: CGPoint(
+                                x: self.contentContainerNode.bounds.width / 2,
+                                y: toY
+                            ),
+                            duration: 0.34,
+                            removeOnCompletion: false
+                        )
+
+
+                        controllerContentNode.layer.animateScale(
+                            from: 1.0,
+                            to: (self.contentContainerNode.bounds.width / controllerContentNode.bounds.width),
+                            duration: 0.34,
+                            removeOnCompletion: false
+                        )*/
+
+
+
+
+
+
+
+
+                        let toY = self.contentContainerNode.frame.minY -
+                        controllerContentNode.convert(controllerContentNode.bounds, to: nil).minY +
+                        controllerContentNode.layer.position.y
+                        controllerContentNode.layer.animateSpring(
+                            from: 1.0 as NSNumber,
+                            to: (self.contentContainerNode.bounds.width / controllerContentNode.bounds.width) as NSNumber,
+
+                            keyPath: "transform.scale",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping,
+                            removeOnCompletion: false
+                        )
+                        controllerContentNode.layer.animateSpring(
+                            from: NSValue(cgPoint: CGPoint(
+                                x: localSourceFrame.width / 2,
+                                y: self.contentContainerNode.bounds.height /
+                                   (self.contentContainerNode.frame.width / localSourceFrame.width) / 2
+                            )),
+                            to: NSValue(cgPoint: CGPoint(
+                                x: self.contentContainerNode.bounds.width / 2,
+                                y: toY
+                            )),
+                            //                            to: NSValue(cgPoint: origPosition),
+                            keyPath: "position",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping,
+                            removeOnCompletion: false
+                        )
+
+
+
+
+
+
+//                        let toY =  self.contentContainerNode.bounds.width / controllerContentNode.bounds.width * controllerContentNode.bounds.height - self.contentContainerNode.bounds.height
+
+
+
+
+
+						/*
+                        let toY = self.contentContainerNode.frame.minY -
+                        controllerContentNode.convert(controllerContentNode.bounds, to: nil).minY +
+                        controllerContentNode.layer.position.y
+//                        let fromY = localSourceFrame.minY -
+//                        controllerContentNode.convert(controllerContentNode.bounds, to: nil).minY +
+//                        controllerContentNode.layer.position.y
+                        controllerContentNode.layer.animateSpring(
+                            from: NSValue(cgPoint: CGPoint(
+                                x: localSourceFrame.width / 2,
+//                                y: controllerContentNode.position.y + (18 / (self.contentContainerNode.bounds.width / localSourceFrame.width))
+                                y: self.contentContainerNode.bounds.height / (self.contentContainerNode.frame.width / localSourceFrame.width) / 2
+                            )),
+//                            to: NSValue(cgPoint: CGPoint(
+//                                x: self.contentContainerNode.bounds.width / 2,
+//                            )),
+//                            to: NSValue(cgPoint: origPosition),
+                            to: NSValue(cgPoint: CGPoint(
+                                x: self.contentContainerNode.bounds.width / 2,
+                                y: toY
+                            )),
+                            keyPath: "position",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping,
+                            removeOnCompletion: false
+                        )
+
+                        controllerContentNode.layer.animateSpring(
+                            from: 1.0 as NSNumber,
+                            //                            from: (localSourceFrame.width / controllerContentNode.bounds.width) as NSNumber,
+                            //                            to: (self.contentContainerNode.bounds.width / localSourceFrame.width) as NSNumber,
+                            to: (self.contentContainerNode.bounds.width / controllerContentNode.bounds.width) as NSNumber,
+
+                            keyPath: "transform.scale",
+                            duration: springDuration,
+                            initialVelocity: 0.0,
+                            damping: springDamping,
+                            removeOnCompletion: false
+                        )*/
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+                    let savedMaxY = self.contentContainerNode.frame.maxY
+                    self.contentContainerNode.layer.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+                    self.contentContainerNode.layer.position = CGPoint(
+                        x: self.contentContainerNode.frame.center.x,
+                        y: savedMaxY
+                    )
+
+
+					/*
+                    self.contentContainerNode.layer.animate(
+                        from: 0.0 as NSNumber,
+                        to: 14.0 as NSNumber,
+                        keyPath: "cornerRadius",
+                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
+                        duration: 0.34,
+                        completion: { [weak self] _ in
+                            self?.animatedIn = true
+                    	}
+                    )
+
+
+
+                    self.contentContainerNode.layer.animate(
+                        from: NSValue(cgRect: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: localSourceFrame.height)),
+                        to: NSValue(cgRect: self.contentContainerNode.bounds),
+                        keyPath: "bounds",
+                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
+                        duration: 0.34,
+                        completion: { _ in
+                    	}
+                    )
+
+
+                    self.contentContainerNode.layer.animate(
+                        from: NSValue(cgPoint: contentContainerOffset),
+                        to: NSValue(cgPoint: CGPoint()),
+                        keyPath: "position",
+                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
+                        duration: 0.34,
+                        additive: true,
+                        completion: { _ in
+                    	}
+                    )
+                	*/
+
+
+
+
+
+
+                    self.contentContainerNode.layer.animateSpring(
+                        from: NSValue(cgPoint: contentContainerOffset),
+                        to: NSValue(cgPoint: CGPoint()),
+                        keyPath: "position",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        additive: true,
+                        completion: { _ in//[weak self] _ in
+                                          //                            self?.contentContainerNode.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+                                          //                            self?.animatedIn = true
+                        })
+
+
+
+                    self.contentContainerNode.layer.animateSpring(
+                        from: NSValue(cgRect: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: localSourceFrame.height)),
+                        to: NSValue(cgRect: self.contentContainerNode.bounds),
+                        keyPath: "bounds",
+                        duration: springDuration,
+                        initialVelocity: 0.0,
+                        damping: springDamping,
+                        completion: { [weak self]_ in
+							
+                            self?.animatedIn = true
+                        }
+                    )
+
+
+
+
+
+
+//                    self.contentContainerNode.layer.animateBounds(
+//                        from: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: localSourceFrame.height),
+//                        to: self.contentContainerNode.bounds,
+//                        duration: springDuration,
+//                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue
+//                    )
+
+//                    self.contentContainerNode.layer.animateSpring(
+//                        from: NSValue(cgRect: CGRect(x: 0.0, y: 0.0, width: localSourceFrame.width, height: localSourceFrame.height)),
+//                        to: NSValue(cgRect: self.contentContainerNode.bounds),
+//                        keyPath: "bounds",
+//                        duration: springDuration,
+//                        initialVelocity: 0.0,
+//                        damping: springDamping,
+//                        completion: {/*[weak self]*/_ in
+//                                //                            self?.contentContainerNode.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+//                                //                            self?.animatedIn = true
+//                        }
+//                    )
+
+
+
+
+
+
+//                    self.contentContainerNode.layer.animateSpring(from: NSValue(cgPoinМt: center), to: NSValue(cgPoint: toCenter), keyPath: "position", duration: 10.0, initialVelocity: 0.0, damping: springDamping, additive: true, completion: { [weak self] _ in
+//                        self?.animatedIn = true
+//                    })
+//                    self.contentContainerNode.view.animate
+//                    self.contentContainerNode.layer.position = center
                 }
             }
         }
@@ -1433,6 +2023,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                     completedContentNode = true
                     if let strongSelf = self, let contentNode = strongSelf.contentContainerNode.contentNode, case let .controller(controller) = contentNode {
                         controller.sourceView.isHidden = false
+                        strongSelf.sourceSuperView.addSubview(strongSelf.sourceView)
                     }
                     intermediateCompletion()
                 })
@@ -1908,7 +2499,9 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                     }
                     
                     let actionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, presentation: .inline, constrainedWidth: constrainedWidth - actionsSideInset * 2.0, constrainedHeight: layout.size.height, transition: actionsContainerTransition)
-                    let contentScale = (constrainedWidth - actionsSideInset * 2.0) / constrainedWidth
+                    let contentScale = (constrainedWidth - actionsSideInset * 2.0) / (constrainedWidth)
+//                    let contentScale = (constrainedWidth - actionsSideInset * 2.0) / constrainedWidth
+
                     var contentUnscaledSize: CGSize
                     if case .compact = layout.metrics.widthClass {
                         self.actionsContainerNode.updateSize(containerSize: actionsSize, contentSize: actionsSize)
@@ -1938,9 +2531,30 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                             contentUnscaledSize = preferredSize
                         }
                     }
-                    let contentSize = CGSize(width: floor(contentUnscaledSize.width * contentScale), height: floor(contentUnscaledSize.height * contentScale))
-                    
-                    self.contentContainerNode.updateLayout(size: contentUnscaledSize, scaledSize: contentSize, transition: transition)
+                    self.contentUnscaledFrame = CGRect(origin: CGPoint(x: 0.0, y: topEdge), size: contentUnscaledSize)
+                    let contentSize = CGSize(width: floor((contentUnscaledSize.width) * contentScale), height: floor((contentUnscaledSize.height) * contentScale))
+                    let unscaledSizeForPreview =  CGSize(
+                        width: contentUnscaledSize.width,
+//                        height: contentUnscaledSize.height + 18
+                        height: contentUnscaledSize.height
+
+                    )
+                    let scaleForPreview =  (constrainedWidth - actionsSideInset * 2.0) / (unscaledSizeForPreview.width)
+
+                    let contentSizeForPreview = CGSize(width: floor(unscaledSizeForPreview.width * scaleForPreview), height: floor(contentUnscaledSize.height * scaleForPreview))
+
+//                    let contentNodeSize = CGSize(width: floor(contentUnscaledSize.width) + 12 * contentScale), height: floor((contentUnscaledSize.height + 12) * contentScale))
+//                    let contentSize = CGSize(width: floor(contentUnscaledSize.width * 1), height: floor(contentUnscaledSize.height * contentScale))
+
+                    // MARK: - Bounds
+                    self.contentContainerNode.updateLayout(
+                        size: unscaledSizeForPreview,
+            			scaledSize: contentSizeForPreview,
+                        transition: transition
+                    )
+//                    self.contentContainerNode.updateLayout(size: contentUnscaledSize, scaledSize: contentNodeSize, transition: transition)
+
+                    self.contentContainerDimView.frame = CGRect(origin: .zero, size: contentUnscaledSize)
                     
                     let maximumActionsFrameOrigin = max(60.0, layout.size.height - layout.intrinsicInsets.bottom - actionsBottomInset - actionsSize.height)
                     var originalActionsFrame: CGRect
@@ -2000,6 +2614,8 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                     
                     let contentContainerFrame = originalContentFrame
                     transition.updateFrame(node: self.contentContainerNode, frame: contentContainerFrame.offsetBy(dx: 0.0, dy: -overflowOffset))
+//                    transition.updateFrame(node: self.contentContainerNode, frame: self.contentUnscaledFrame.offsetBy(dx: 0.0, dy: -overflowOffset))
+
                     actionsContainerTransition.updateFrame(node: self.actionsContainerNode, frame: originalActionsFrame.offsetBy(dx: 0.0, dy: -overflowOffset))
                     
                     if isInitialLayout {
@@ -2519,8 +3135,8 @@ public final class ContextController: ViewController, StandalonePresentableContr
     public var premiumReactionsSelected: (() -> Void)?
     
     public var getOverlayViews: (() -> [UIView])?
-    
-    public init(account: Account, presentationData: PresentationData, source: ContextContentSource, items: Signal<ContextController.Items, NoError>, recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil, gesture: ContextGesture? = nil, workaroundUseLegacyImplementation: Bool = false) {
+
+    public init(account: Account, presentationData: PresentationData, source: ContextContentSource, items: Signal<ContextController.Items, NoError>, recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil, gesture: ContextGesture? = nil, workaroundUseLegacyImplementation: Bool = false, peer: EngineRenderedPeer? = nil) {
         self.account = account
         self.presentationData = presentationData
         self.source = source
